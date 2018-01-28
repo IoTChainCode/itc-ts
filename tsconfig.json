@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "outDir": "dist",
+    "target": "es6",
+    "lib": [
+      "es2015"
+    ],
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "sourceMap": true,
+    "alwaysStrict": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/tmp/*"
+  ]
+}

@@ -1,0 +1,11 @@
+.DS_Store
+.idea
+
+logs
+*.log
+
+node_modules/
+.npm
+
+dist
+*.sqlite

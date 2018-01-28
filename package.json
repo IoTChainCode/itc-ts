@@ -1,0 +1,62 @@
+{
+  "name": "itc-ts",
+  "version": "1.0.0",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "author": "dbjbear@gmail.com",
+  "devDependencies": {
+    "@types/crypto-js": "^3.1.38",
+    "@types/jest": "^22.0.1",
+    "@types/node": "^8.5.7",
+    "jest": "^22.1.4",
+    "ts-jest": "^22.0.1",
+    "tsify": "^3.0.4",
+    "vinyl-buffer": "^1.0.1",
+    "vinyl-source-stream": "^2.0.0",
+    "watchify": "^3.9.0"
+  },
+  "dependencies": {
+    "@types/async": "^2.0.46",
+    "@types/lodash": "^4.14.92",
+    "@types/pino": "^4.7.1",
+    "@types/sqlite3": "^3.1.1",
+    "@types/websocket": "0.0.36",
+    "@types/ws": "^3.2.1",
+    "async": "^2.6.0",
+    "bitcore-lib": "^0.15.0",
+    "bitcore-mnemonic": "^1.5.0",
+    "clime": "^0.5.9",
+    "crypto": "^1.0.1",
+    "leveldown": "^2.1.1",
+    "levelup": "^2.0.0-rc2",
+    "lodash": "^4.17.4",
+    "pino": "^4.10.3",
+    "process": "^0.11.10",
+    "secp256k1": "^3.4.0",
+    "sqlite": "^2.9.1",
+    "thirty-two": "^1.0.2",
+    "typescript": "^2.6.2",
+    "uuid": "^3.2.1",
+    "websocket": "^1.0.25",
+    "websocket-as-promised": "^0.6.0",
+    "ws": "^4.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.tsx?$": "ts-jest"
+    },
+    "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json",
+      "node"
+    ]
+  }
+}
