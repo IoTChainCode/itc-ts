@@ -48,7 +48,7 @@
 //                 ifNotEnoughFunds: onError,
 //                 ifError: onError,
 //                 ifOk: function (objJoint) {
-//                     network.broadcastJoint(objJoint);
+//                     network.broadcastUnit(objJoint);
 //                     onDone();
 //                 }
 //             })

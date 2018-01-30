@@ -1,9 +1,9 @@
 import WebSocketServer from './WebSocketServer';
 import WebSocketClient from './WebSocketClient';
 import * as objectHash from '../common/object_hash';
-import Joint from '../core/joint';
 import {readWitnesses} from '../core/witness';
 import logger from '../common/log';
+import Unit from '../core/unit';
 
 export class Network {
     clients: Map<string, WebSocketClient>;
@@ -95,8 +95,8 @@ export class Network {
         return ws.sendResponse(id, `response on ${id}`);
     }
 
-    async broadcastJoint(joint: Joint) {
-        return this.broadcastData('joint', joint);
+    async broadcastUnit(unit: Unit) {
+        return this.broadcastData('unit', unit);
     }
 
     async getWitnesses(ws: string | WebSocketClient) {
@@ -106,8 +106,8 @@ export class Network {
     async onServerData(ws: WebSocketClient, subject: string, body: any) {
         logger.info(`server receive data, subject ${subject}, body ${body}`);
         switch (subject) {
-            case 'joint':
-                return this.handleJoint(ws, body);
+            case 'unit':
+                return this.handleUnit(ws, body);
         }
     }
 
@@ -117,16 +117,16 @@ export class Network {
             case 'heartbeat':
                 return ws.sendResponse(id, null);
 
-            case 'get_joint':
+            case 'get_unit':
                 const witnesses = await readWitnesses();
                 return ws.sendResponse(id, witnesses);
         }
     }
 
-    async handleJoint(ws: WebSocketClient, joint: Joint) {
+    async handleUnit(ws: WebSocketClient, unit: Unit) {
         // ifOK
-        logger.info('server receive joint');
-        return this.forwardData(ws, 'joint', joint);
+        logger.info('server receive unit');
+        return this.forwardData(ws, 'unit', unit);
     }
 }
 

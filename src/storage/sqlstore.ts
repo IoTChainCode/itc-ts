@@ -25,7 +25,7 @@ export class SqliteStore implements ISqlStore {
     }
 
     async get(sql: string, ...params): Promise<any> {
-        await this.getOrOpen()
+        await this.getOrOpen();
         return this._db.get(sql, params);
     }
 
@@ -46,6 +46,17 @@ export class SqliteStore implements ISqlStore {
 
     static getUnixTimestamp(date: string) {
         return `strftime('%s', ${date})`;
+    }
+
+    static escape(str) {
+        if (typeof str === 'string')
+            return "'" + str.replace(/'/g, "''") + "'";
+        else if (Array.isArray(str))
+            return str.map(function (member) {
+                return SqliteStore.escape(member);
+            }).join(',');
+        else
+            throw Error('escape: unknown type ' + (typeof str));
     }
 }
 

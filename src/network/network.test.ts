@@ -1,6 +1,7 @@
-import Joint from '../core/joint';
-import {composeGenesisUnit} from '../core/composer';
 import {Network} from './Network';
+import * as composer from '../core/composer';
+import * as conf from '../common/conf';
+import {Signer} from '../core/signer';
 
 test('test network', async () => {
     const network1 = new Network();
@@ -13,7 +14,14 @@ test('test network', async () => {
     await network1.sendData('ws://localhost:4000', 'hello', 'network2');
     await network2.sendData('ws://localhost:5000', 'hello', 'network2');
 
-    const unit = await composeGenesisUnit();
-    const joint = new Joint(unit);
-    await network1.broadcastJoint(joint);
+    const witnesses = [];
+    for (let i = 0; i < conf.COUNT_WITNESSES; i++) {
+        witnesses.push(i);
+    }
+
+    const outputs = [];
+    const signer = new Signer();
+    const changeAddress = 'changeAddress';
+    const unit = await composer.composeUnit(witnesses, [], [], changeAddress, outputs, signer);
+    await network1.broadcastUnit(unit);
 });

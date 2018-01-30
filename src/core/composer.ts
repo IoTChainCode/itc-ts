@@ -1,5 +1,4 @@
 import * as _ from 'lodash';
-import parentComposer from './parent_composer';
 import {Signer} from './signer';
 import storage from '../storage/storage';
 import {IssueInput, Message, Output} from './message';
@@ -7,124 +6,88 @@ import Unit from './unit';
 import Author from './author';
 import sqlstore from '../storage/sqlstore';
 import * as conf from '../common/conf';
-import * as mcOutputs from '../core/mc_outputs';
-import * as headerCommission from '../core/headers_commission';
-import * as payloadCommission from '../core/payload_commission';
 import {readWitnesses} from './witness';
-
-const TRANSFER_INPUT_SIZE = 0 // type: "transfer" omitted
-    + 44 // unit
-    + 8 // message_index
-    + 8; // output_index
-
-const HEADERS_COMMISSION_INPUT_SIZE = 18 // type: "headers_commission"
-    + 8 // from_main_chain_index
-    + 8; // to_main_chain_index
-
-const WITNESSING_INPUT_SIZE = 10 // type: "witnessing"
-    + 8 // from_main_chain_index
-    + 8; // to_main_chain_index
-
-const ADDRESS_SIZE = 32;
+import composeParent from './composeParent';
+import Authentifier from './authentifiers';
 
 function isGenesis() {
+    // TODO
     return true;
 }
 
-export async function getInputs(authors: Author[],
-                                targetAmount: number,
-                                payingAddresses: Address[],
-                                lastBallMCI: number): Promise<any[]> {
+export async function composeGenesisInputs() {
+    const issueInput: IssueInput = {
+        type: 'issue',
+        serialNumber: 1,
+        amount: conf.TOTAL,
+    };
+    return [issueInput];
+}
+
+export async function composeInputs(authors: Author[],
+                                    targetAmount: number,
+                                    payingAddresses: Address[],
+                                    lastBallMCI: number): Promise<[any[], number]> {
     if (isGenesis()) {
-        const issueInput: IssueInput = {
-            type: 'issue',
-            serialNumber: 1,
-            amount: conf.TOTAL,
-        };
-        return [issueInput];
+        return [await composeGenesisInputs(), 0];
     } else {
-        const [inputs, total] = await pickDivisibleCoinsForAmount(payingAddresses, lastBallMCI, targetAmount);
-        return inputs.map(input => input.input);
+        const [inputs, total] = await readUtxoForAmount(payingAddresses, lastBallMCI, targetAmount);
+        return [inputs.map(input => input.input), total];
     }
 }
 
-export function getOutputs(outputs: Output[]): Output[] {
-    const changeOutputs: Output[] = outputs.filter(output => output.amount === 0);
-    const externalOutputs: Output[] = outputs.filter(output => output.amount > 0);
-
-    const result = changeOutputs;
-    for (const output of externalOutputs) {
-        result.push(output);
-    }
-
-    return result;
+export function composeOutputs(outputs: Output[], changeAddress: Address, change: number): Output[] {
+    const changeOutput = new Output(changeAddress, change);
+    return [changeOutput].concat(outputs.filter(output => output.amount > 0));
 }
 
-export async function getParents(witnesses: Address[]): Promise<[Base64[], Base64, Base64, number]> {
-    if (isGenesis()) {
-        return [[], null, null, null];
-    }
-    const [parentUnits, lastBall] = await parentComposer.pickParentUnitsAndLastBall(witnesses);
-    return [parentUnits, lastBall.ball, lastBall.unit, lastBall.mci];
-}
-
-export async function getAuthors(addresses: Address[], signer: Signer): Promise<Author[]> {
+export async function composeAuthors(addresses: Address[], signer: Signer): Promise<Author[]> {
     return await Promise.all(addresses.map(async (address) => {
         const signingPathLengths = await signer.readSigningPaths(address, []);
         const signingPaths = Object.keys(signingPathLengths);
-        const authentifiers: any = {};
+        const authentifiers: Authentifier[] = [];
         for (const path of signingPaths) {
-            authentifiers[path] = '-'.repeat(signingPathLengths[path]);
+            authentifiers.push(new Authentifier(path, '-'.repeat(signingPathLengths[path])));
+            authentifiers[path] = '-'.repeat(signingPathLengths[path]); // placeholder
         }
         return new Author(address, authentifiers);
     }));
 }
 
-// get ref unit, maybe null
-export async function getWitnessListUnit(witnesses: Address[], lastBallMCI: number): Promise<Address> {
+export async function composeWitnessListUnit(witnesses: Address[], lastBallMCI: number): Promise<Address> {
     if (isGenesis()) {
         return null;
     }
-    // It is expected that many users will want to use exactly the same witness list.
-    // In this case, to save space, they don’t list the addresses of all 12 witnesses.
-    // Rather, they give a reference to another earlier unit, which listed these witnesses explicitly.
     return await storage.findWitnessListUnit(witnesses, lastBallMCI);
-}
-
-export async function getWitnesses(witnesses: Address[]): Promise<Address[]> {
-    if (witnesses && witnesses.length > 0) {
-        return witnesses;
-    }
-    return await readWitnesses();
 }
 
 export async function composeUnit(witnesses: Address[],
                                   signingAddresses: Address[],
                                   payingAddresses: Address[],
+                                  changeAddress: Address,
                                   outputs: Output[],
                                   signer: Signer) {
     const fromAddresses = _.union(signingAddresses, payingAddresses).sort();
 
-    const [parentUnits, lastBall, lastBallUnit, lastBallMCI] = await getParents(witnesses);
-    const witnessListUnit = await getWitnessListUnit(witnesses, lastBallMCI);
-    witnesses = await getWitnesses(witnesses);
-    const authors = await getAuthors(fromAddresses, signer);
+    const [parentUnits, lastStable] = await composeParent(witnesses, isGenesis());
+    const witnessListUnit = await composeWitnessListUnit(witnesses, lastStable.mci);
+    if (!witnessListUnit && !witnesses) {
+        witnesses = await readWitnesses();
+    }
 
-    const headersCommission = 101;
-    const nakedPayloadCommission = 102;
-
+    const authors = await composeAuthors(fromAddresses, signer);
     const externalOutputs: Output[] = outputs.filter(output => output.amount > 0);
-    const totalAmount = externalOutputs.reduce((acc, cur) => acc + cur.amount, 0);
-    const targetAmount = totalAmount + headersCommission + nakedPayloadCommission;
-    const inputs = await getInputs(authors, targetAmount, payingAddresses, lastBallMCI);
-    outputs = getOutputs(outputs);
-    const message = new Message('payment', 'inline', inputs, outputs);
+    const outputAmount = externalOutputs.reduce((acc, cur) => acc + cur.amount, 0);
+    const [inputs, inputAmount] = await composeInputs(authors, outputAmount, payingAddresses, lastStable.mci);
+    const headersCommission = 0;
+    const payloadCommission = 0;
+    const changeAmount = inputAmount - outputAmount - headersCommission - payloadCommission;
+    const finalOutputs = composeOutputs(outputs, changeAddress, changeAmount);
+    const message = new Message('payment', 'inline', inputs, finalOutputs);
     return new Unit(
-        conf.version,
-        conf.alt,
         parentUnits,
-        lastBall,
-        lastBallUnit,
+        lastStable.ball,
+        lastStable.unit,
         witnessListUnit,
         authors,
         witnesses,
@@ -132,19 +95,7 @@ export async function composeUnit(witnesses: Address[],
     );
 }
 
-export async function composeGenesisUnit() {
-    let witnesses = [];
-    for (let i = 0; i < conf.COUNT_WITNESSES; i++) {
-        witnesses.push(i);
-    }
-    const output = new Output('change add', 0);
-    const outputs = getOutputs([output]);
-    witnesses = await getWitnesses(witnesses);
-    const signer = new Signer();
-    return composeUnit(witnesses, [], [], outputs, signer);
-}
-
-async function readAddressesUTXO(addresses: Address[], mci: number, amount?: number, limit: number = 1) {
+async function readUtxo(addresses: Address[], mci: number, amount?: number, limit: number = 1) {
     const requireAmount = amount ? `AND amount > ${amount}` : '';
     return sqlstore.all(`
         SELECT unit, message_index, output_index, amount, blinding, address
@@ -157,72 +108,62 @@ async function readAddressesUTXO(addresses: Address[], mci: number, amount?: num
     );
 }
 
-// arrAddresses is paying addresses
-// all inputs must appear before last_ball
-async function pickDivisibleCoinsForAmount(addresses: Address[], lastBallMCI: number, requiredAmount: number): Promise<any[]> {
-    const inputWithProofs = [];
+async function readUtxoForAmount(addresses: Address[], lastBallMCI: number, amount: number): Promise<[any[], number]> {
     let totalAmount = 0;
-
-    // adds element to arrInputsWithProofs
-    function addInput(input) {
-        totalAmount += input.amount;
-        delete input.amount;
-        delete input.blinding;
-        const inputWithProof = {input: input};
-        inputWithProofs.push(inputWithProof);
-    }
+    const inputsWithProofs = [];
 
     // first, try to find an output just bigger than the required amount
-    let inputs = await readAddressesUTXO(addresses, lastBallMCI, requiredAmount, 1);
-
-    if (inputs) {
-        addInput(inputs[0]);
-        return [inputWithProofs, totalAmount];
+    let inputs = await readUtxo(addresses, lastBallMCI, amount, 1);
+    if (inputs.length === 0) {
+        // then, try to add smaller coins until we accumulate the required amount
+        inputs = await readUtxo(addresses, lastBallMCI, null, conf.MAX_INPUTS_PER_PAYMENT_MESSAGE - 2);
     }
 
-    // then, try to add smaller coins until we accumulate the required amount
-    inputs = await readAddressesUTXO(addresses, lastBallMCI, null, conf.MAX_INPUTS_PER_PAYMENT_MESSAGE - 2);
-
     for (const input of inputs) {
-        requiredAmount += TRANSFER_INPUT_SIZE;
-        addInput(input);
-        if (totalAmount > requiredAmount) {
-            return [inputWithProofs, totalAmount];
+        totalAmount += input.amount;
+        inputsWithProofs.push(input);
+        if (totalAmount > amount) {
+            return [inputsWithProofs, totalAmount];
         }
     }
 
-    return [null, null];
+    throw Error('still not enough');
 
-    async function addHeadersCommissionInputs() {
-        return addMcInputs(
-            'headers_commission',
-            HEADERS_COMMISSION_INPUT_SIZE,
-            headerCommission.getMaxSpendableMciForLastBallMci(lastBallMCI),
-        );
-    }
+    // still not enough, try to add earned header commission
+    // TBD
 
-    async function addWitnessingInputs() {
-        return addMcInputs(
-            'witnessing',
-            WITNESSING_INPUT_SIZE,
-            payloadCommission.getMaxSpendableMciForLastBallMci(lastBallMCI),
-        );
-    }
-
-    async function addMcInputs(type: string, inputSize: number, maxMCI: number) {
-        await Promise.all(addresses.map(async (address) => {
-            const targetAmount = requiredAmount + inputSize - totalAmount;
-            const [from, to, earnings, isSufficient] =
-                await mcOutputs.findMcIndexIntervalToTargetAmount(type, address, maxMCI, targetAmount);
-            totalAmount += earnings;
-            const input = {
-                type: type,
-                from_main_chain_index: from,
-                to_main_chain_index: to,
-            };
-            requiredAmount += inputSize;
-            inputWithProofs.push({input: input});
-        }));
-    }
+    // still not enough, try to add witness commission
+    // TBD
+    // async function addHeadersCommissionInputs() {
+    //     return addMcInputs(
+    //         'headers_commission',
+    //         HEADERS_COMMISSION_INPUT_SIZE,
+    //         headerCommission.getMaxSpendableMciForLastBallMci(lastBallMCI),
+    //     );
+    // }
+    //
+    // async function addWitnessingInputs() {
+    //     return addMcInputs(
+    //         'witnessing',
+    //         WITNESSING_INPUT_SIZE,
+    //         payloadCommission.getMaxSpendableMciForLastBallMci(lastBallMCI),
+    //     );
+    // }
+    //
+    // async function addMcInputs(type: string, inputSize: number, maxMCI: number) {
+    //     await Promise.all(addresses.map(async (address) => {
+    //         const targetAmount = amount + inputSize - totalAmount;
+    //         const [from, to, earnings, isSufficient] =
+    //             await mcOutputs.findMcIndexIntervalToTargetAmount(type, address, maxMCI, targetAmount);
+    //         totalAmount += earnings;
+    //         const input = {
+    //             type: type,
+    //             from_main_chain_index: from,
+    //             to_main_chain_index: to,
+    //         };
+    //         amount += inputSize;
+    //         inputWithProofs.push({input: input});
+    //     }));
+    // }
 }
 

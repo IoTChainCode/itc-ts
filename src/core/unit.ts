@@ -2,8 +2,11 @@ import Author from './author';
 import {Message} from './message';
 import * as objectHash from '../common/object_hash';
 import * as objectLength from '../common/object_length';
+import * as conf from '../common/conf';
 
 export default class Unit {
+    readonly version = conf.version;
+    readonly alt = conf.alt;
     unit: Base64;
     headersCommission: number;
     payloadCommission: number;
@@ -15,9 +18,7 @@ export default class Unit {
 
     earnedHeadersCommissionRecipients: any[];
 
-    constructor(readonly version: string,
-                readonly alt: string,
-                readonly parentUnits: Base64[],
+    constructor(readonly parentUnits: Base64[],
                 readonly lastBall: Base64,
                 readonly lastBallUnit: Base64,
                 readonly witnessListUnit: Base64,
