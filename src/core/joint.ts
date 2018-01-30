@@ -1,7 +1,6 @@
 import Unit from './unit';
 import * as objectHash from '../common/object_hash';
 import sqlstore from '../storage/sqlstore';
-import * as hash from '../common/hash';
 import * as conf from '../common/conf';
 import {Input, Output} from './message';
 import storage from '../storage/storage';
@@ -10,30 +9,16 @@ import Author from './author';
 import Authentifier from './authentifiers';
 
 export default class Joint {
-    readonly ball: Base64;
+    // readonly ball: Base64;
     readonly timestamp: number;
 
     constructor(readonly unit: Unit) {
-        this.ball = objectHash.getBallHash(unit, null, null, null);
+        // this.ball = objectHash.getBallHash(unit, null, null, null);
         this.timestamp = Math.round(Date.now() / 1000);
     }
 
     static parseFromJson(json: string): Joint {
         return null;
-    }
-
-    validate() {
-        if (!this.unit.unit)
-            throw Error('no unit');
-
-        if (this.unit.unit.length !== conf.HASH_LENGTH)
-            throw Error('wrong unit length');
-
-        if (object_hash.getUnitHash(unit) !== this.unit.unit) {
-            throw Error('wrong unit hash');
-        }
-
-        return true;
     }
 }
 

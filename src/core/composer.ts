@@ -132,6 +132,18 @@ export async function composeUnit(witnesses: Address[],
     );
 }
 
+export async function composeGenesisUnit() {
+    let witnesses = [];
+    for (let i = 0; i < conf.COUNT_WITNESSES; i++) {
+        witnesses.push(i);
+    }
+    const output = new Output('change add', 0);
+    const outputs = getOutputs([output]);
+    witnesses = await getWitnesses(witnesses);
+    const signer = new Signer();
+    return composeUnit(witnesses, [], [], outputs, signer);
+}
+
 async function readAddressesUTXO(addresses: Address[], mci: number, amount?: number, limit: number = 1) {
     const requireAmount = amount ? `AND amount > ${amount}` : '';
     return sqlstore.all(`
