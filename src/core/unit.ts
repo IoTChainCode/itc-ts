@@ -11,6 +11,7 @@ export default class Unit {
     mainChainIndex?: number;
     timestamp?: number;
     isStable?: boolean;
+    ball: Base64;
 
     earnedHeadersCommissionRecipients: any[];
 
