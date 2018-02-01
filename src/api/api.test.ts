@@ -1,11 +1,6 @@
 import API from './api';
-import Account from '../common/account';
 
 test('test api', async () => {
-    const account = Account.create();
-    const api = new API(account);
+    const api = await API.fromPassphrase('dbj');
     console.log(api);
-
-    const wallet = await api.createWallet();
-    console.log(wallet);
 });

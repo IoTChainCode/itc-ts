@@ -2,11 +2,29 @@ import sqlstore from '../storage/sqlstore';
 import * as objectHash from '../common/object_hash';
 import Unit from './unit';
 import * as conf from '../common/conf';
+import Signature from '../common/Signature';
 
 type Definition = string;
 
 export class Signer {
-    constructor(readonly signWithLocalPrivateKey?: any) {
+    constructor(readonly xPrivKey) {
+    }
+
+    signWithLocalPrivateKey(wallet: string,
+                                  account: number,
+                                  isChange: number,
+                                  addressIndex: number,
+                                  buffer: Buffer) {
+        const derived = this.xPrivKey
+            .derive(44, true)
+            .derive(0, true)
+            .derive(account, true)
+            .derive(isChange)
+            .derive(addressIndex)
+            .privateKey;
+
+        const privKeyBuf = derived.bn.toBuffer({size: 32}); // https://github.com/bitpay/bitcore-lib/issues/47
+        return Signature.sign(buffer, privKeyBuf);
     }
 
     async readDefinitions(address: Address): Promise<Definition[]> {

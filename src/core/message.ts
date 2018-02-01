@@ -4,7 +4,8 @@ export class Input {
     constructor(readonly unit: Base64,
                 readonly messageIndex: number,
                 readonly outputIndex: number,
-                readonly type?: string) {
+                readonly type?: string,
+                readonly address?: string) {
     }
 }
 

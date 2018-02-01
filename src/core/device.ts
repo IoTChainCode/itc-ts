@@ -1,38 +1,14 @@
 import logger from '../common/log';
-import {IWebSocket} from '../common/websocket';
 import sqlstore from '../storage/sqlstore';
-import signature from '../common/signature';
+import signature from '../common/Signature';
 import * as hash from '../common/hash';
 import encrypt from '../common/encrypt';
 import * as address from '../common/address';
-import network from './network';
 import * as crypto from 'crypto';
 import * as secp256k1 from 'secp256k1';
 import * as objectHash from '../common/object_hash';
-
-export interface IDevice {
-    permanentPrivateKey(): PrivateKey;
-
-    permanentPubKey(): PubKey;
-
-    ephemeralPrivateKey(): PrivateKey;
-
-    ephemeralPubKey(): PubKey;
-
-    deviceAddress(): Address;
-
-    deviceName(): string;
-
-    deviceHub(): string;
-
-    genPrivateKey(): PrivateKey;
-
-    sendMessageToHub(ws: IWebSocket | Url | null, recipientPubkey: PubKey, subject: any, body: any);
-
-    sendMessageToDevice(to: Address, subject: string, body: any);
-
-    sendPairingMessage(hub: string, recipientPubKey: PubKey, paringSecret: string, reversePairingSecret: string);
-}
+import WebSocketClient from '../network/WebSocketClient';
+import network from '../network/Network';
 
 type TempPubKey = {
     tempPubKey: PubKey;
@@ -40,7 +16,7 @@ type TempPubKey = {
     signature: Base64;
 };
 
-export class Device implements IDevice {
+export class Device {
     private _permanentPrivateKey: PrivateKey;
     private _permanentPubKey: PubKey;
     private _ephemeralPrivateKey: PrivateKey;
@@ -106,7 +82,7 @@ export class Device implements IDevice {
         return this.sendMessageToHub(rows[0].hub, rows[0].pubkey, subject, body);
     }
 
-    async sendMessageToHub(ws: IWebSocket | string | null, recipientPubkey: PubKey, subject: any, body: any): Promise<any> {
+    async sendMessageToHub(ws: WebSocketClient | string | null, recipientPubkey: PubKey, subject: any, body: any): Promise<any> {
         const obj = {
             from: this.deviceAddress,
             device_hub: this.deviceHub,
@@ -126,7 +102,7 @@ export class Device implements IDevice {
         return this._reliablySendPreparedMessageToHub(rows[0].hub, recipientPubkey, obj);
     }
 
-    async _reliablySendPreparedMessageToHub(ws: IWebSocket | string, recipientPubKey: PubKey, obj: any) {
+    async _reliablySendPreparedMessageToHub(ws: WebSocketClient | string, recipientPubKey: PubKey, obj: any) {
         const to = address.deriveAddress(recipientPubKey);
         logger.info(`will encrypt and send to ${to}: ${obj}`);
         const encryptedMessage = encrypt.encryptMessage(obj, recipientPubKey);
@@ -141,14 +117,13 @@ export class Device implements IDevice {
         return this._sendPreparedMessageToHub(ws, recipientPubKey, messageHash, obj);
     }
 
-    async _sendPreparedMessageToHub(ws: IWebSocket | string, recipientPubKey: PubKey, messageHash: Base64, json: string) {
+    async _sendPreparedMessageToHub(ws: WebSocketClient | string, recipientPubKey: PubKey, messageHash: Base64, json: string) {
         if (typeof ws === 'string') {
-            ws = network.getOrConnectWebsocket(ws);
+            ws = await network.getOrCreateClient(ws);
         }
         let resp: TempPubKey;
-
         try {
-            resp = await network.sendCommand(ws, 'hub/get_temp_pubkey', recipientPubKey);
+            resp = await network.sendRequest(ws, 'hub/get_temp_pubkey', recipientPubKey);
         } catch (e) {
             return await sqlstore.run(`UPDATE outbox SET last_error=? WHERE message=?`, [e, messageHash]);
         }
@@ -176,7 +151,7 @@ export class Device implements IDevice {
 
         content.signature = signature.sign(hash.sha256B64(content), this.permanentPrivateKey());
 
-        const response = await network.sendCommand(ws, 'hub/deliver', content);
+        const response = await network.sendRequest(ws, 'hub/deliver', content);
         if (response === 'accepted') {
             return await sqlstore.run(`DELETE FROM outbox WHERE message_hash=?`, [messageHash]);
         } else {

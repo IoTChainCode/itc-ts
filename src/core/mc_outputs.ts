@@ -1,5 +1,3 @@
-// Functions for reading headers commissions and witnessing outputs.
-// In all functions below, type=(headers_commission|witnessing)
 import sqlstore from '../storage/sqlstore';
 
 export async function readNextSpendableMcIndex(type: string, address: Address): Promise<number> {
@@ -18,7 +16,6 @@ export async function readMaxSpendableMcIndex(type: string): Promise<number> {
     const mci = await sqlstore.get('SELECT MAX(main_chain_index) AS max_mc_index FROM ' + table);
     return mci.max_mc_index || 0;
 }
-
 
 export async function findMcIndexIntervalToTargetAmount(type: string, address: Address, maxMCI: number, targetAmount: number) {
     const table = type + '_outputs';

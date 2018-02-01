@@ -1,6 +1,5 @@
 import * as _ from 'lodash';
 import {Signer} from './signer';
-import storage from '../storage/storage';
 import {IssueInput, Message, Output} from './message';
 import Unit from './unit';
 import Author from './author';
@@ -9,6 +8,7 @@ import * as conf from '../common/conf';
 import {readWitnesses} from './witness';
 import composeParent from './composeParent';
 import Authentifier from './authentifiers';
+import Witnesses from '../models/Witnesses';
 
 function isGenesis() {
     // TODO
@@ -58,7 +58,7 @@ export async function composeWitnessListUnit(witnesses: Address[], lastBallMCI: 
     if (isGenesis()) {
         return null;
     }
-    return await storage.findWitnessListUnit(witnesses, lastBallMCI);
+    return await Witnesses.findWitnessListUnit(witnesses, lastBallMCI);
 }
 
 export async function composeUnit(witnesses: Address[],

@@ -1,15 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// app installation dir, this is where the topmost package.json resides
-export function getAppRootDir() {
-    const mainModuleDir = path.dirname(process.mainModule.paths[0]);
-    return getPackageJsonDir(mainModuleDir);
-}
-
 // app data dir inside user's home directory
 export function getAppDataDir() {
-    return (getAppsDataDir() + '/' + getAppName());
+    return `${getAppsDataDir()}/itc`;
 }
 
 function getAppsDataDir() {
@@ -35,11 +29,4 @@ function getPackageJsonDir(startDir: string) {
             throw Error('no package.json found');
         return getPackageJsonDir(parentDir);
     }
-}
-
-// read app name from the topmost package.json
-function getAppName() {
-    const appDir = getAppRootDir();
-    console.log('app dir ' + appDir);
-    return require(appDir + '/package.json').name;
 }

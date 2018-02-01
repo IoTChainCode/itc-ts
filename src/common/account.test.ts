@@ -1,4 +1,4 @@
-import Account from './account';
+import Account from './Account';
 
 test('test account', () => {
     const account = Account.create();
