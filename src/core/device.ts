@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import * as secp256k1 from 'secp256k1';
 import * as objectHash from '../common/object_hash';
 import WebSocketClient from '../network/WebSocketClient';
-import network from '../network/Network';
+import network from '../network/Peer';
 
 type TempPubKey = {
     tempPubKey: PubKey;
@@ -17,15 +17,15 @@ type TempPubKey = {
 };
 
 export class Device {
-    private _permanentPrivateKey: PrivateKey;
+    private _permanentPrivateKey: DevicePrivKey;
     private _permanentPubKey: PubKey;
-    private _ephemeralPrivateKey: PrivateKey;
+    private _ephemeralPrivateKey: DevicePrivKey;
     private _ephemeralPubKey: PubKey;
     private _deviceAddress: Address;
     private _deviceName: string;
     private _deviceHub: string;
 
-    constructor(privateKey?: PrivateKey) {
+    constructor(privateKey?: DevicePrivKey) {
         if (!privateKey) {
             privateKey = this.genPrivateKey();
         }
@@ -34,7 +34,7 @@ export class Device {
         this._deviceAddress = address.deriveAddress(this._permanentPubKey);
     }
 
-    permanentPrivateKey(): PrivateKey {
+    permanentPrivateKey(): DevicePrivKey {
         return this._permanentPrivateKey;
     }
 
@@ -42,7 +42,7 @@ export class Device {
         return this._permanentPubKey;
     }
 
-    ephemeralPrivateKey(): PrivateKey {
+    ephemeralPrivateKey(): DevicePrivKey {
         return this._ephemeralPrivateKey;
     }
 
@@ -62,7 +62,7 @@ export class Device {
         return this._deviceHub;
     }
 
-    genPrivateKey(): PrivateKey {
+    genPrivateKey(): DevicePrivKey {
         let privKey;
         do {
             privKey = crypto.randomBytes(32);

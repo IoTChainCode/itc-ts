@@ -183,6 +183,8 @@ export async function updateMainChain(fromUnit: Base64, lastAddedUnit: Base64) {
             });
             if (Object.keys(changedUnits).length > 0)
                 return calcLIMCIs();
+            else
+                return null;
         }
 
         async function checkAllLatestIncludedMcIndexesAreSet() {
@@ -292,6 +294,7 @@ export async function updateMainChain(fromUnit: Base64, lastAddedUnit: Base64) {
             await markMcIndexStable(firstUnstableMcIndex);
             return updateStableMcFlag();
         }
+        return null;
     }
 
     // includes parentUnits

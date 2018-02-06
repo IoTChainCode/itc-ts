@@ -4,6 +4,7 @@ import Parents from './Parents';
 import Witnesses from './Witnesses';
 import {Authors} from './Authors';
 import Messages from './Messages';
+import {isGenesisUnit} from '../core/genesis';
 
 type StaticUnitProps = {
     level: number,
@@ -14,6 +15,9 @@ type StaticUnitProps = {
 
 const cachedUnits = new Map<Base64, StaticUnitProps>();
 const stableUnits = new Map<Base64, any>();
+
+
+type UnitStatus = 'unknown' | 'known';
 
 export default class Units {
     static async readStaticUnitProps(unit: Base64): Promise<StaticUnitProps> {
@@ -90,24 +94,46 @@ export default class Units {
         );
     }
 
-    static async save(unit: Unit, sequence: string, isGenesis: boolean = false) {
+    static async save(unit: Unit, sequence: string) {
         const fields = [
             'unit', 'version', 'alt', 'witness_list_unit', 'last_ball_unit', 'headers_commission',
             'payload_commission', 'sequence', 'content_hash',
         ];
         const values = '?,?,?,?,?,?,?,?,?';
         const params = [unit.unit, unit.version, unit.alt, unit.witnessListUnit, unit.lastBallUnit, unit.headersCommission,
-            unit.payloadCommission, sequence, unit.contentHash,
+            unit.payloadCommission, sequence,
         ];
 
-        await sqlstore.run(`INSERT INTO units (${fields}) VALUES (${values})`, params);
+        await sqlstore.run(`INSERT INTO units (${fields}) VALUES (${values})`, ...params);
 
-        if (isGenesis) {
+        if (isGenesisUnit(unit)) {
             await sqlstore.run(`
             UPDATE units SET is_on_main_chain=1, main_chain_index=0, is_stable=1, level=0, witnessed_level=0
-            WHERE unit=?`, [unit.unit]);
+            WHERE unit=?`, unit.unit);
         } else {
-            await sqlstore.run(`UPDATE units SET is_free=0 WHERE unit IN(?)`, [unit.parentUnits]);
+            await sqlstore.run(`UPDATE units SET is_free=0 WHERE unit IN(?)`, unit.parentUnits);
         }
+
+        // save balls
+        if (unit.ball) {
+            await sqlstore.run('INSERT INTO balls (ball, unit) VALUES(?,?)', unit.ball, unit.unit);
+        }
+        // save parenthoods
+        if (unit.parentUnits) {
+            for (const parent of unit.parentUnits) {
+                await sqlstore.run('INSERT INTO parenthoods (child_unit, parent_unit) VALUES(?,?)', unit.unit, parent);
+            }
+        }
+        await Messages.save(unit);
+        await Witnesses.save(unit);
+        await Authors.save(unit);
+    }
+
+    static async checkUnitStatus(unit: Base64): Promise<UnitStatus> {
+        const rows = await sqlstore.all('SELECT 1 FROM units WHERE unit=?', unit);
+        if (rows.length > 0)
+            return 'known';
+
+        return 'unknown';
     }
 }

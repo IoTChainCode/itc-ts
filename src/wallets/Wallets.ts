@@ -1,11 +1,12 @@
-import * as hash from '../common/hash';
 import {Device} from '../core/device';
 import * as _ from 'lodash';
 import sqlstore from '../storage/sqlstore';
-import Account from '../common/Account';
+import HDKey from '../common/HDKey';
 import * as Bitcore from 'bitcore-lib';
 import Wallet from './wallet';
-import Accounts from '../common/Accounts';
+import HDKeys from '../common/HDKeys';
+import XPubKeys from '../models/XPubKeys';
+import logger from '../common/log';
 
 export default class Wallets {
     static async readWalletIds(): Promise<Base64[]> {
@@ -13,13 +14,18 @@ export default class Wallets {
         return rows.map(row => row.wallet);
     }
 
-    static async create(account: Account, device: Device): Promise<Wallet> {
-        const derived = account.xPrivKey.derive(44, true).derive(0, true).derive(0, true);
+    static async read() {
+        return sqlstore.all('select * from wallets');
+    }
+
+    static async create(key: HDKey): Promise<Wallet> {
+        const device = new Device(key.devicePrivKey);
+        const derived = key.xPrivKey.derive(0, 0);
         const xPubKeyStr = new Bitcore.HDPublicKey(derived).toString();
-        const wallet = hash.sha256B64(xPubKeyStr);
+        const wallet = key.walletId;
         const definition = ['sig', {pubkey: '$pubkey@' + device.deviceAddress()}];
         const deviceAddressesBySigningPaths = getDeviceAddressesBySigningPaths(definition);
-        const deviceAddresses = _.uniq(_.values(deviceAddressesBySigningPaths));
+        const deviceAddresses = _.uniq([...deviceAddressesBySigningPaths.values()]);
 
         await sqlstore.run(
             'INSERT INTO wallets (wallet, account, definition_template) VALUES (?,?,?)',
@@ -34,16 +40,14 @@ export default class Wallets {
             );
         }));
 
-        const signingPaths = Object.keys(deviceAddressesBySigningPaths);
-        await Promise.all(signingPaths.map(async (signingPath) => {
-            const deviceAddress = deviceAddressesBySigningPaths[signingPath];
+        for (const [path, address] of deviceAddressesBySigningPaths) {
             await  sqlstore.run(`
             INSERT INTO wallet_signing_paths (wallet, signing_path, device_address) VALUES (?,?,?)`,
-                wallet, signingPath, deviceAddress,
+                wallet, path, address,
             );
-        }));
+        }
 
-        return new Wallet(wallet, account);
+        return new Wallet(wallet, key);
     }
 
     static async readWalletAddresses(wallet: string): Promise<Address[]> {
@@ -54,26 +58,32 @@ export default class Wallets {
         return rows.map(row => row.address);
     }
 
-    static async readOrCreate(passphrase?: string): Promise<Wallet> {
-        const account = await Accounts.readOrCreate(passphrase);
-        const devicePrivKey = account.xPrivKey.derive(1, true).privateKey.bn.toBuffer({size: 32});
-        const device = new Device(devicePrivKey);
-        if (await Wallets.isWalletExists()) {
-            const wallet = (await Wallets.readWalletIds())[0];
-            const rows = await sqlstore.all('SELECT 1 FROM extended_pubkeys WHERE device_address=?', device.deviceAddress());
-            if (rows.length > 1)
-                throw Error('more than 1 extended pubkey');
-            if (rows.length === 0)
-                throw Error('passphrase is incorrect');
-            return new Wallet(wallet, account);
+    static async readOrCreate(passphrase?: string, keyPath?: string): Promise<Wallet> {
+        const key = await HDKeys.readOrCreate(passphrase, keyPath);
+        const device = new Device(key.devicePrivKey);
+        const wallet = key.walletId;
+        if (await Wallets.isWalletExists(wallet)) {
+            logger.info(`wallet ${wallet} exists`);
+            const pk = await XPubKeys.findByDeviceAddress(device.deviceAddress());
+            logger.info(`pk: ${pk}`);
+            if (!pk) {
+                throw Error('incorrect passphrase');
+            }
+            return new Wallet(wallet, key);
         } else {
-            return Wallets.create(account, device);
+            logger.info(`wallet ${wallet} does not exist, will create`);
+            return Wallets.create(key);
         }
     }
 
-    static async isWalletExists() {
-        const rows = await sqlstore.all('SELECT wallet FROM wallets');
-        return rows.length > 0;
+    static async isWalletExists(wallet?: string) {
+        if (!wallet) {
+            const rows = await sqlstore.all('SELECT wallet FROM wallets');
+            return rows.length > 0;
+        } else {
+            const rows = await sqlstore.all('SELECT wallet FROM wallets where wallet=?', wallet);
+            return rows.length > 0;
+        }
     }
 }
 

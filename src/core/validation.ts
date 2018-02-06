@@ -6,8 +6,103 @@ import {
 import {Message, Payload} from './message';
 import * as conf from '../common/conf';
 import sqlstore from '../storage/sqlstore';
-import * as genesis from '../core/genesis';
 
+
+async function validateParents(unit: Unit, lbMCI: number) {
+
+    // avoid merging the obvious nonserials
+    async function checkNoSameAddressInDifferentParents() {
+        if (unit.parentUnits.length === 1)
+            return checkLastBallDidNotRetreat();
+        const rows = await sqlstore.all(`
+            SELECT address, COUNT(*) AS c 
+            FROM unit_authors WHERE unit IN(?) 
+            GROUP BY address HAVING c>1`,
+            unit.parentUnits,
+        );
+        if (rows.length > 0)
+            throw Error('some addresses found more than once in parents, e.g. ' + rows[0].address);
+        return checkLastBallDidNotRetreat();
+    }
+
+    async function checkLastBallDidNotRetreat() {
+        const row = await sqlstore.get(`
+            SELECT MAX(lb_units.main_chain_index) AS max_parent_last_ball_mci
+            FROM units JOIN units AS lb_units ON units.last_ball_unit=lb_units.unit
+            WHERE units.unit IN(?)`,
+            unit.parentUnits,
+        );
+
+        const max_parent_last_ball_mci = row.max_parent_last_ball_mci;
+        if (max_parent_last_ball_mci > lbMCI) {
+            throw Error(`last ball mci must not retreat, parents: ${unit.parentUnits.join(', ')}`);
+        }
+    }
+
+    if (unit.parentUnits.length > conf.MAX_PARENTS_PER_UNIT) // anti-spam
+        throw Error('too many parents: ' + unit.parentUnits.length);
+    // after this point, we can trust parent list as it either agrees with parents_hash or agrees with hash tree
+    // hence, there are no more joint errors, except unordered parents or skiplist units
+    const lastBall = unit.lastBall;
+    const lastBallUnit = unit.lastBallUnit;
+    let prev = '';
+    const missingParentUnits = [];
+    const prevParentUnitProps = [];
+    // objValidationState.max_parent_limci = 0;
+    const join = unit.ball ? 'LEFT JOIN balls USING(unit) LEFT JOIN hash_tree_balls ON units.unit=hash_tree_balls.unit' : '';
+    const field = unit.ball ? ', IFNULL(balls.ball, hash_tree_balls.ball) AS ball' : '';
+
+    for (const parent of unit.parentUnits) {
+        if (parent <= prev) {
+            throw Error('parent units not ordered');
+        }
+        prev = parent;
+
+        const row = await sqlstore.get(`SELECT units.* ${field} FROM units ${join} WHERE units.unit=?`, parent);
+        if (row === undefined) {
+            missingParentUnits.push(parent);
+        }
+        if (unit.ball && row.ball === null) {
+            throw Error('no ball corresponding to parent unit');
+        }
+    }
+
+    if (missingParentUnits.length > 0) {
+        const rows = await sqlstore.all('SELECT error FROM known_bad_joints WHERE unit IN(?)', missingParentUnits);
+        if (rows.length > 0) {
+            throw Error('some of the unit parents are known bad');
+        } else {
+            throw Error(`unresolved parent units: ${missingParentUnits.join(',')}`);
+        }
+    }
+
+    const rows = await sqlstore.all(`
+        SELECT is_stable, is_on_main_chain, main_chain_index, ball, 
+        (SELECT MAX(main_chain_index) FROM units) AS max_known_mci
+        FROM units LEFT JOIN balls USING(unit) WHERE unit=?`,
+        lastBallUnit,
+    );
+    if (rows.length !== 1) {
+        throw Error(`last ball unit ${lastBallUnit} not found`);
+    }
+
+    const objLastBallUnitProps = rows[0];
+
+    // it can be unstable and have a received (not self-derived) ball
+    //if (objLastBallUnitProps.ball !== null && objLastBallUnitProps.is_stable === 0)
+    //    throw "last ball "+last_ball+" is unstable";
+    if (objLastBallUnitProps.ball === null && objLastBallUnitProps.is_stable === 1)
+        throw Error(`last ball unit ${lastBallUnit} is stable but has no ball`);
+    if (objLastBallUnitProps.is_on_main_chain !== 1)
+        throw Error(`last ball ${lastBall} is not on MC`);
+    if (objLastBallUnitProps.ball && objLastBallUnitProps.ball !== lastBall)
+        throw Error(`last_ball ${lastBall} and ${lastBallUnit} do not match`);
+    if (objLastBallUnitProps.is_stable === 1) {
+        // if it were not stable, we wouldn't have had the ball at all
+        if (objLastBallUnitProps.ball !== lastBall)
+            throw Error(`stable: lastBall ${lastBall} and lastBallUnit ${lastBallUnit} do not match`);
+    }
+}
 
 async function validatePayment(message: Message, unit: Unit) {
     if (hasFieldsExcept(message.payload, ['inputs', 'outputs'])) {
@@ -61,42 +156,42 @@ async function validatePaymentInputsAndOutputs(payload: Payload, messageIndex: n
         let doubleSpendVars = [];
 
         switch (type) {
-            case 'issue':
-                if (inputIndex !== 0)
-                    throw Error('issue must come first');
-                if (hasFieldsExcept(input, ['type', 'address', 'amount', 'serial_number']))
-                    throw Error('unknown fields in issue input');
-                if (!isPositiveInteger(input.amount))
-                    throw Error('amount must be positive');
-                if (!isPositiveInteger(input.serial_number))
-                    throw Error('serial_number must be positive');
-                if (input.serial_number !== 1)
-                    throw Error('for capped asset serial_number must be 1');
-                if (isIssue)
-                    throw Error('only one issue per message allowd');
-                isIssue = true;
-
-                let address = null;
-                if (authorAddresses.length === 1) {
-                    if ('address' in input)
-                        throw Error('when single-authored, must not put address in issue input');
-                    address = authorAddresses[0];
-                } else {
-                    if (typeof input.address !== 'string')
-                        throw Error('when multi-authored, must put address in issue input');
-                    if (authorAddresses.indexOf(input.address) === -1)
-                        throw Error('issue input address ' + input.address + ' is not an author');
-                    address = input.address;
-                }
-
-                inputAddresses = [address];
-                if (!genesis.isGenesisUnit(unit.unit))
-                    throw Error('only genesis can issue base asset');
-                if (input.amount !== conf.TOTAL)
-                    throw Error('issue must be equal to cap');
-                totalInput += input.amount;
-
-                break;
+            // case 'issue':
+            //     if (inputIndex !== 0)
+            //         throw Error('issue must come first');
+            //     if (hasFieldsExcept(input, ['type', 'address', 'amount', 'serial_number']))
+            //         throw Error('unknown fields in issue input');
+            //     if (!isPositiveInteger(input.amount))
+            //         throw Error('amount must be positive');
+            //     if (!isPositiveInteger(input.serial_number))
+            //         throw Error('serial_number must be positive');
+            //     if (input.serial_number !== 1)
+            //         throw Error('for capped asset serial_number must be 1');
+            //     if (isIssue)
+            //         throw Error('only one issue per message allowd');
+            //     isIssue = true;
+            //
+            //     let address = null;
+            //     if (authorAddresses.length === 1) {
+            //         if ('address' in input)
+            //             throw Error('when single-authored, must not put address in issue input');
+            //         address = authorAddresses[0];
+            //     } else {
+            //         if (typeof input.address !== 'string')
+            //             throw Error('when multi-authored, must put address in issue input');
+            //         if (authorAddresses.indexOf(input.address) === -1)
+            //             throw Error('issue input address ' + input.address + ' is not an author');
+            //         address = input.address;
+            //     }
+            //
+            //     inputAddresses = [address];
+            //     if (!genesis.isGenesisUnit(unit.unit))
+            //         throw Error('only genesis can issue base asset');
+            //     if (input.amount !== conf.TOTAL)
+            //         throw Error('issue must be equal to cap');
+            //     totalInput += input.amount;
+            //
+            //     break;
 
             case 'transfer':
                 if (hasFieldsExcept(input, ['type', 'unit', 'message_index', 'output_index']))

@@ -4,9 +4,10 @@ import logger from '../common/log';
 import * as uuid from 'uuid/v4';
 import * as http from 'http';
 import timeoutPromise from '../common/timeoutPromise';
+import {SocketAddress} from './SocketAddr';
 
 const defaultOptions = {
-    timeout: 60,
+    timeout: 60 * 1000,
     connectionTimeout: 0,
 };
 
@@ -56,12 +57,12 @@ class Request {
 export default class WebSocketClient {
     private _url: string;
     private _ws: WebSocket;
-    private _remoteAddress: string;
-    private _remotePort: number;
     private _options = defaultOptions;
     private _opening: ControlledPromise;
     private _closing: ControlledPromise;
     private _request: Request;
+
+    socketAddress: SocketAddress;
 
     private _handleData = (data: any) => {
         // do nothing
@@ -79,9 +80,7 @@ export default class WebSocketClient {
         }
 
         if (req) {
-            this._remoteAddress = req.connection.remoteAddress;
-            this._remotePort = req.connection.remotePort;
-            this._url = `${this._remoteAddress}:${this._remotePort}`;
+            this.socketAddress = SocketAddress.fromHostPort(req.connection.remoteAddress, req.connection.remotePort);
         }
 
         this._opening = new ControlledPromise();

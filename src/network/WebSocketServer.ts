@@ -6,8 +6,9 @@ import * as co from 'co';
 import * as http from 'http';
 import WebSocketClient from './WebSocketClient';
 import compose = require('koa-compose');
+import {SocketAddress} from './SocketAddr';
 
-interface Context extends Koa.Context {
+export interface Context extends Koa.Context {
     ws: WebSocketClient;
     data: any;
 }
@@ -18,6 +19,11 @@ export default class WebSocketServer extends Koa {
 
     constructor() {
         super();
+    }
+
+    close() {
+        this.wss.close();
+        this.clients.forEach(x => x.close());
     }
 
     async broadcast(data: any) {
@@ -32,11 +38,10 @@ export default class WebSocketServer extends Koa {
 
     onConnection(ws: WebSocket, req: http.IncomingMessage) {
         const client = new WebSocketClient(ws, req);
-        logger.info(`websocket server on connection ${client.url}`);
         this.clients.add(client);
-        logger.info(`inbound clients ${this.clients.size}`);
         const ctx = this.createContext(req, null);
         ctx.ws = client;
+        ctx.socketAddr = SocketAddress.fromHostPort(req.connection.remoteAddress, req.connection.remotePort);
 
         const fn = co.wrap(compose(this.middleware));
         ws.on('message', data => {

@@ -51,11 +51,11 @@ CREATE TABLE parenthoods (
 );
 CREATE INDEX byChildUnit ON parenthoods(child_unit);
 
---CREATE TABLE definitions (
---	definition_chash CHAR(32) NOT NULL PRIMARY KEY,
---	definition TEXT NOT NULL,
---	has_references TINYINT NOT NULL
---);
+CREATE TABLE definitions (
+	definition_chash CHAR(32) NOT NULL PRIMARY KEY,
+	definition TEXT NOT NULL,
+	has_references TINYINT NOT NULL
+);
 
 -- current list of all known from-addresses
 CREATE TABLE addresses (
@@ -284,8 +284,8 @@ CREATE TABLE wallet_signing_paths (
 --    FOREIGN KEY byDeviceAddress(device_address) REFERENCES correspondent_devices(device_address)
 );
 
--- BIP44 addresses. Coin type and account are fixed and stored in credentials in localstorage.
--- derivation path is m/44'/0'/account'/is_change/address_index
+-- BIP44 addresses. Coin type and key are fixed and stored in credentials in localstorage.
+-- derivation path is m/44'/0'/key'/is_change/address_index
 CREATE TABLE my_addresses (
 	address CHAR(32) NOT NULL PRIMARY KEY,
 	wallet CHAR(44) NOT NULL,
@@ -305,6 +305,7 @@ CREATE TABLE my_witnesses (
 DROP TABLE units;
 DROP TABLE balls;
 DROP TABLE parenthoods;
+DROP TABLE definitions;
 DROP TABLE unit_authors;
 DROP TABLE authentifiers;
 DROP TABLE unit_witnesses;
@@ -329,3 +330,4 @@ DROP TABLE wallet_signing_paths;
 DROP TABLE my_addresses;
 DROP TABLE my_witnesses;
 
+-- peers

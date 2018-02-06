@@ -14,7 +14,7 @@ export type EncryptedPackage = {
 export interface IEncrypt {
     encryptMessage(json: any, pubKey: PubKey);
 
-    decryptPackage(encrypted: EncryptedPackage, pubKey: PubKey, privateKey: PrivateKey);
+    decryptPackage(encrypted: EncryptedPackage, pubKey: PubKey, privateKey: DevicePrivKey);
 }
 
 function deriveSharedSecret(ecdh: ECDH, peerPubKey: PubKey): Buffer {
@@ -59,7 +59,7 @@ class Encrypt implements IEncrypt {
         };
     }
 
-    decryptPackage(encrypted: EncryptedPackage, pubKey: PubKey, privateKey: PrivateKey): any {
+    decryptPackage(encrypted: EncryptedPackage, pubKey: PubKey, privateKey: DevicePrivKey): any {
         const ecdh = crypto.createECDH('secp256k1');
         ecdh.setPrivateKey(privateKey);
         const sharedSecret = deriveSharedSecret(ecdh, encrypted.dh.sender_ephemeral_pubkey);

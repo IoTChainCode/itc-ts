@@ -35,4 +35,5 @@ test('test web socket client/server', async () => {
     await server.broadcast('broadcast');
     const response = await client2.sendRequest('hello req');
     console.log('response: ', response);
+    server.close();
 });

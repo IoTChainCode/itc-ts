@@ -7,7 +7,7 @@ export const COUNT_WITNESSES = 12;
 export const MAX_WITNESS_LIST_MUTATIONS = 1;
 export const TOTAL = 1e15;
 export const MAJORITY_OF_WITNESSES =
-    (COUNT_WITNESSES % 2 === 0) ? (COUNT_WITNESSES / 2 + 1) : Math.ceil(COUNT_WITNESSES / 2); // 7个major vote
+    (COUNT_WITNESSES % 2 === 0) ? (COUNT_WITNESSES / 2 + 1) : Math.ceil(COUNT_WITNESSES / 2);
 export const COUNT_MC_BALLS_FOR_PAID_WITNESSING = 100;
 
 export const GENESIS_UNIT =
@@ -25,3 +25,9 @@ export const MAX_OUTPUTS_PER_PAYMENT_MESSAGE = 128;
 
 export const APP_DATA_DIR = getAppDataDir();
 export const KEY_STORE_PATH = `${APP_DATA_DIR}/keystore.json`;
+
+
+export const PEER_CONF = {
+    LISTEN_PORT: Number(process.env['LISTEN_PORT']) || 3000,
+    POOL_SEEDS: (process.env['POOL_SEEDS'] || '').split(',') || [],
+};

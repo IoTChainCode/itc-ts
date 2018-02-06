@@ -12,7 +12,7 @@ export default class Witnesses {
             SELECT witness_list_hashes.witness_list_unit
             FROM witness_list_hashes CROSS JOIN units ON witness_list_hashes.witness_list_unit=unit
             WHERE witness_list_hash=? AND sequence='good' AND is_stable=1 AND main_chain_index<=?`,
-            [objectHash.getObjHashB64(witnesses), lbMCI],
+            objectHash.getObjHashB64(witnesses), lbMCI,
         );
         return rows[0].witness_list_unit;
     }
@@ -48,9 +48,9 @@ export default class Witnesses {
 
     static async save(unit: Unit): Promise<void> {
         for (const witness of unit.witnesses) {
-            await sqlstore.run(`INSERT INTO unit_witnesses (unit, address) VALUES (?,?)`, [unit.unit, witness]);
+            await sqlstore.run(`INSERT INTO unit_witnesses (unit, address) VALUES (?,?)`, unit.unit, witness);
         }
-        await sqlstore.run('INSERT INTO witness_list_hashes (witness_list_unit, witness_list_hash) VALUES (?,?)',
-            [unit.unit, objectHash.getObjHashB64(unit.witnesses)]);
+        await sqlstore.run('INSERT OR IGNORE INTO witness_list_hashes (witness_list_unit, witness_list_hash) VALUES (?,?)',
+            unit.unit, objectHash.getObjHashB64(unit.witnesses));
     }
 }

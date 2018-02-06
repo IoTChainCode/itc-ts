@@ -4,7 +4,8 @@
   "scripts": {
     "clean": "rimraf dist",
     "build": "tsc",
-    "test": "jest"
+    "dev": "tsc -w",
+    "test": "jest --runInBand"
   },
   "author": "dbjbear@gmail.com",
   "devDependencies": {
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@types/async": "^2.0.46",
+    "@types/bitcoinjs-lib": "^3.3.1",
     "@types/fs-extra": "^5.0.0",
     "@types/koa": "^2.0.43",
     "@types/lodash": "^4.14.92",
@@ -29,6 +31,7 @@
     "@types/websocket": "0.0.36",
     "@types/ws": "^3.2.1",
     "async": "^2.6.0",
+    "bitcoinjs-lib": "^3.3.2",
     "bitcore-lib": "^0.15.0",
     "bitcore-mnemonic": "^1.5.0",
     "clime": "^0.5.9",

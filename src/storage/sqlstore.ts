@@ -21,7 +21,7 @@ export class SqliteStore implements ISqlStore {
 
     async open(filename: string = ':memory:') {
         this._db = await sqlite.open(filename);
-        await this._db.migrate({force: 'last', migrationsPath: './src/migrations'});
+        await this._db.migrate({force: 'last', migrationsPath: './migrations'});
     }
 
     async get(sql: string, ...params): Promise<any> {
@@ -42,6 +42,10 @@ export class SqliteStore implements ISqlStore {
     async exec(sql: string): Promise<Database> {
         await this.getOrOpen();
         return this._db.exec(sql);
+    }
+
+    escape(xs: any[]): string {
+        return xs.map(SqliteStore.escape).join(',');
     }
 
     static getUnixTimestamp(date: string) {

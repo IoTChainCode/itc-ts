@@ -3,7 +3,7 @@ import * as chash from './checksum_hash';
 import * as hash from './hash';
 import {getSourceString} from './string_utils';
 import Unit from '../core/unit';
-import Joint from '../core/joint';
+import logger from './log';
 
 export function getChash160(obj: any): string {
     return chash.getChash160(getSourceString(obj));
@@ -36,8 +36,10 @@ function getNakedUnit(unit: Unit): any {
         'alt': unit.alt,
         'witnesses': unit.witnesses,
         'messages': nakedMessages,
+        'authors': unit.authors,
     };
 
+    logger.info(naked, 'naked');
     return naked;
 }
 
@@ -45,36 +47,31 @@ export function getUnitContentHash(unit: Unit): Base64 {
     return getObjHashB64(getNakedUnit(unit));
 }
 
-export function getUnitHash(objUnit: Unit): Base64 {
-    if (objUnit.contentHash) {
-        return getObjHashB64(getNakedUnit(objUnit));
-    }
+export function getUnitHash(unit: Unit): Base64 {
     const objStrippedUnit: any = {
-        alt: objUnit.alt,
-        authors: objUnit.authors.map((author) => {
+        alt: unit.alt,
+        authors: unit.authors.map(author => {
             return {address: author.address};
         }),
-        contentHash: getUnitContentHash(objUnit),
-        version: objUnit.version,
+        contentHash: getUnitContentHash(unit),
+        version: unit.version,
     };
-    if (objUnit.witnessListUnit) {
-        objStrippedUnit.witnessListUnit = objUnit.witnessListUnit;
+    if (unit.witnessListUnit) {
+        objStrippedUnit.witnessListUnit = unit.witnessListUnit;
     } else {
-        objStrippedUnit.witnesses = objUnit.witnesses;
+        objStrippedUnit.witnesses = unit.witnesses;
     }
-    if (objUnit.parentUnits) {
-        objStrippedUnit.parentUnits = objUnit.parentUnits;
-        objStrippedUnit.lastBall = objUnit.lastBall;
-        objStrippedUnit.lastBallUnit = objUnit.lastBallUnit;
+    if (unit.parentUnits && unit.parentUnits.length > 0) {
+        objStrippedUnit.parentUnits = unit.parentUnits;
+        objStrippedUnit.lastBall = unit.lastBall;
+        objStrippedUnit.lastBallUnit = unit.lastBallUnit;
     }
+
     return getObjHashB64(objStrippedUnit);
 }
 
 export function getUnitHashToSign(objUnit: any): Buffer {
     const objNakedUnit = getNakedUnit(objUnit);
-    for (const author of objNakedUnit.authors) {
-        delete author.authentifiers;
-    }
     return hash.sha256(getSourceString(objNakedUnit));
 }
 
@@ -92,10 +89,10 @@ export function getBallHash(unit: any, arrParentBalls: any, arrSkiplistBalls: an
     return getObjHashB64(objBall);
 }
 
-export function getJointHash(joint: Joint): Base64 {
-    // we use JSON.stringify, we can't use objectHash here because it might throw errors
-    return hash.sha256B64(JSON.stringify(joint));
-}
+// export function getJointHash(joint: Joint): Base64 {
+//     // we use JSON.stringify, we can't use objectHash here because it might throw errors
+//     return hash.sha256B64(JSON.stringify(joint));
+// }
 
 function cleanNulls(obj: any) {
     Object.keys(obj).forEach((key) => {

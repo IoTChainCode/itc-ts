@@ -1,15 +1,19 @@
 import sqlstore from '../storage/sqlstore';
+import logger from '../common/log';
 
 type Balance = {
     stable: number,
     pending: number,
 };
 
-export type Balances = Map<string, Balance>;
+export type Balances = {
+    [key: string]: Balance;
+};
 
 export async function readBalance(address: Address): Promise<Balances> {
-    const balances: Balances = new Map();
-    balances['base'] = {stable: 0, pending: 0};
+    const balances = {
+        'base': {stable: 0, pending: 0},
+    };
 
     let rows = await sqlstore.all(`
         SELECT asset, is_stable, SUM(amount) AS balance

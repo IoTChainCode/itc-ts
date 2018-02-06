@@ -10,11 +10,13 @@ export class Signer {
     constructor(readonly xPrivKey) {
     }
 
-    signWithLocalPrivateKey(wallet: string,
-                                  account: number,
-                                  isChange: number,
-                                  addressIndex: number,
-                                  buffer: Buffer) {
+    signWithLocalPrivateKey(
+        wallet: string,
+        account: number,
+        isChange: number,
+        addressIndex: number,
+        buffer: Buffer,
+    ) {
         const derived = this.xPrivKey
             .derive(44, true)
             .derive(0, true)
@@ -28,25 +30,23 @@ export class Signer {
     }
 
     async readDefinitions(address: Address): Promise<Definition[]> {
-        return await sqlstore.get(`
-            SELECT definition FROM my_addresses WHERE address=? 
-            UNION 
-            SELECT definition FROM shared_addresses WHERE shared_address=?`,
-            [address, address],
+        const row = await sqlstore.get(`
+            SELECT definition FROM my_addresses WHERE address=?`,
+            address,
         );
+        return JSON.parse(row.definition);
     }
 
-    async readSigningPaths(address: Address, signingDeviceAddresses: Address[]): Promise<Map<string, number>> {
+    async readSigningPaths(address: Address, signingDeviceAddresses: DeviceAddress[]): Promise<Map<string, number>> {
         const signingPathTypes = await readFullSigningPaths(address, signingDeviceAddresses);
         const signingLengths = new Map<string, number>();
-        signingPathTypes.forEach((value, key) => {
-            if (value === 'key') {
-                signingLengths[key] = conf.SIG_LENGTH;
-            } else if (value === 'merkle') {
-                signingLengths[key] = 1;
+        for (const key in signingPathTypes) {
+            if (signingPathTypes[key] === 'key') {
+                signingLengths.set(key, conf.SIG_LENGTH);
+            } else {
+                signingLengths.set(key, 1);
             }
-        });
-
+        }
         return signingLengths;
     }
 
@@ -54,7 +54,7 @@ export class Signer {
         const bufToSign = objectHash.getUnitHashToSign(unit);
         const addressObj = await findAddress(address, path);
         return this.signWithLocalPrivateKey(
-            addressObj.wallet, addressObj.account, addressObj.is_change, addressObj.address_index, bufToSign);
+            addressObj.wallet, 0, addressObj.is_change, addressObj.address_index, bufToSign);
     }
 }
 
@@ -63,14 +63,14 @@ async function findAddress(address: Address, signingPath: any) {
         SELECT wallet, account, is_change, address_index, full_approval_date, device_address
         FROM my_addresses JOIN wallets USING(wallet) JOIN wallet_signing_paths USING(wallet)
         WHERE address=? AND signing_path=?`,
-        [address, signingPath],
+        address, signingPath,
     );
 
     const row = rows[0];
     return {
         address: address,
         wallet: row.wallet,
-        account: row.account,
+        account: row.key,
         is_change: row.is_change,
         address_index: row.address_index,
     };

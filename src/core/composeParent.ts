@@ -1,5 +1,7 @@
 import sqlstore, {SqliteStore} from '../storage/sqlstore';
 import * as conf from '../common/conf';
+import logger from '../common/log';
+import Units from '../models/Units';
 
 type LastStable = {
     ball: string,
@@ -15,29 +17,28 @@ async function pickParentUnits(witnesses: Base64[]) {
             address IN(?)
         ) AS count_matching_witnesses
         FROM units
-        LEFT JOIN archived_joints USING(unit)
-        WHERE +sequence='good' AND is_free=1 AND archived_joints.unit IS NULL ORDER BY unit LIMIT ?`,
+        WHERE +sequence='good' AND is_free=1 ORDER BY unit LIMIT ?`,
         witnesses, conf.MAX_PARENTS_PER_UNIT,
     );
     return rows.map(row => row.unit);
 }
 
 async function findLastStableMcBall(witnesses: Address[]): Promise<LastStable> {
-    const row = await sqlstore.get(`
+    const rows = await sqlstore.all(`
         SELECT ball, unit, main_chain_index FROM units JOIN balls USING(unit)
         WHERE is_on_main_chain=1 AND is_stable=1 AND +sequence='good' AND (
             SELECT COUNT(*)
             FROM unit_witnesses
-            WHERE unit_witnesses.unit IN(units.unit, units.witness_list_unit) AND address IN(?)
+            WHERE unit_witnesses.unit IN(units.unit, units.witness_list_unit)
         )>=?
         ORDER BY main_chain_index DESC LIMIT 1`,
-        witnesses, conf.COUNT_WITNESSES - conf.MAX_WITNESS_LIST_MUTATIONS,
+        conf.COUNT_WITNESSES - conf.MAX_WITNESS_LIST_MUTATIONS,
     );
 
     return {
-        ball: row.ball,
-        unit: row.unit,
-        mci: row.main_chain_index,
+        ball: rows[0].ball,
+        unit: rows[0].unit,
+        mci: rows[0].main_chain_index,
     };
 }
 
@@ -53,13 +54,11 @@ async function trimParentList(parentUnits: Base64[], witnesses: Address[]): Prom
     return rows.map(row => row.unit).sort();
 }
 
-export default async function composeParent(witnesses: Address[], isGenesis: boolean = false): Promise<[Base64[], LastStable]> {
-    if (isGenesis) {
-        return [[], {ball: null, unit: null, mci: 0}];
-    }
-
+export default async function composeParent(witnesses: Address[]): Promise<[Base64[], LastStable]> {
     const parents = await pickParentUnits(witnesses);
+    logger.info({parents}, 'pickParentUnits');
     const lastStable = await findLastStableMcBall(witnesses);
+    logger.info({lastStable}, 'findLastStableMcBall');
     const trimmed = await trimParentList(parents, witnesses);
     return [trimmed, lastStable];
 }

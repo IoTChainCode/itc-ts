@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "downlevelIteration": true,
     "experimentalDecorators": true,
     "outDir": "dist",
     "target": "es6",
@@ -15,8 +16,5 @@
   },
   "include": [
     "src/**/*.ts"
-  ],
-  "exclude": [
-    "src/tmp/*"
   ]
 }

@@ -1,9 +1,9 @@
 import sqlstore from '../storage/sqlstore';
-import Authentifier from '../core/authentifiers';
 import Author from '../core/author';
 import Unit from '../core/unit';
 import * as objectHash from '../common/object_hash';
 import * as genesis from '../core/genesis';
+import {Authentifiers} from '../core/authentifiers';
 
 export class Authors {
     static async read(unit: Base64): Promise<Author[]> {
@@ -13,21 +13,26 @@ export class Authors {
         );
 
         return Promise.all(rows.map(async (row) => {
-            const auths = await sqlstore.all(
+            const rows = await sqlstore.all(
                 'SELECT path, authentifier FROM authentifiers WHERE unit=? AND address=?',
                 unit, row.address,
             );
 
-            const authentifiers = auths.map(auth => {
-                return new Authentifier(auth.path, auth.authentifier);
-            });
+            // const authentifiers = auths.map(auth => {
+            //     return new Authentifier(auth.path, auth.authentifier);
+            // });
+
+            const authentifiers: Authentifiers = {};
+            for (const row of rows) {
+                authentifiers[row.path] = row.authentifier;
+            }
 
             return new Author(row.address, authentifiers);
         }));
     }
 
     static async save(unit: Unit): Promise<void> {
-        const isGenesis = genesis.isGenesisUnit(unit.unit);
+        const isGenesis = genesis.isGenesisUnit(unit);
         const authorAddresses = [];
         for (let i = 0; i < unit.authors.length; i++) {
             const author = unit.authors[i];
